@@ -40,17 +40,20 @@ This is a scaffold implementation intended to establish:
 - `machine.json` schema direction
 - Deterministic, allowlisted triage command list
 
+Modules now perform baseline Phase 1 behavior (offline pcap parse, deterministic detection, slice generation, triage logging, reporting, and hashing). Live capture is guarded to Windows/Npcap and returns a clear error on other platforms.
 Most modules currently provide no-op/stub behavior to keep architecture and contracts explicit while implementation is built out.
 
 ## Quick start (skeleton run)
 
 ```bash
+go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output --input-pcap ./path/to/capture.pcap
 go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output
 ```
 
 Optional:
 
 ```bash
+go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output --input-pcap ./path/to/capture.pcap --compress
 go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output --compress
 ```
 

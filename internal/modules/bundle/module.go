@@ -18,6 +18,16 @@ type Module interface {
 	Compress(context.Context, string) (string, error)
 }
 
+type Default struct{}
+
+func NewDefault() *Default { return &Default{} }
+
+func (n *Default) PrepareLayout(_ context.Context, in PrepareInput) (string, error) {
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "HOST"
+	}
+	hostname = strings.ReplaceAll(hostname, " ", "_")
 type Noop struct{}
 
 func NewNoop() *Noop { return &Noop{} }
@@ -35,6 +45,7 @@ func (n *Noop) PrepareLayout(_ context.Context, in PrepareInput) (string, error)
 	return bundlePath, nil
 }
 
+func (n *Default) Compress(_ context.Context, bundlePath string) (string, error) {
 func (n *Noop) Compress(_ context.Context, bundlePath string) (string, error) {
 	zipPath := bundlePath + ".zip"
 	out, err := os.Create(zipPath)

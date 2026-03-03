@@ -1,5 +1,10 @@
 package contracts
 
+import (
+	"path/filepath"
+	"strings"
+	"time"
+)
 import "time"
 
 const (
@@ -86,4 +91,28 @@ type MachineReport struct {
 	Events        []Event         `json:"events"`
 	Metrics       Metrics         `json:"metrics"`
 	Artifacts     []ArtifactEntry `json:"artifacts"`
+}
+
+func ArtifactsForFiles(files []string, hashes map[string]string) []ArtifactEntry {
+	res := make([]ArtifactEntry, 0, len(files))
+	for _, file := range files {
+		name := filepath.Base(file)
+		rel := filepath.ToSlash(file)
+		res = append(res, ArtifactEntry{FileName: rel, SHA256: hashes[name], Type: artifactType(file)})
+	}
+	return res
+}
+
+func artifactType(path string) string {
+	p := filepath.ToSlash(path)
+	switch {
+	case strings.Contains(p, "/triage/"):
+		return "triage_output"
+	case strings.Contains(p, "/slices/"):
+		return "pcap_slice"
+	case strings.HasSuffix(p, ".pcap"):
+		return "pcap"
+	default:
+		return "report"
+	}
 }

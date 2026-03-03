@@ -19,6 +19,7 @@ func main() {
 	flag.Int64Var(&cfg.MaxCaptureBytes, "max-bytes", 512*1024*1024, "Maximum pcap size in bytes")
 	flag.StringVar(&cfg.OutputRoot, "out", "./output", "Output root directory")
 	flag.BoolVar(&cfg.CompressBundle, "compress", false, "Compress bundle into archive")
+	flag.StringVar(&cfg.InputPCAPPath, "input-pcap", "", "Optional offline PCAP to analyze instead of live capture")
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "", log.LstdFlags|log.LUTC)
