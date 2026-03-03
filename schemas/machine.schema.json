@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wulfgar.local/schemas/machine.schema.json",
+  "title": "Wulfgar Machine Report",
+  "type": "object",
+  "required": ["schema_version", "tool_version", "host", "capture", "events", "metrics", "artifacts"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "tool_version": { "type": "string" },
+    "host": {
+      "type": "object",
+      "required": ["hostname", "os_version", "primary_interface", "interface_ip"],
+      "properties": {
+        "hostname": { "type": "string" },
+        "os_version": { "type": "string" },
+        "architecture": { "type": "string" },
+        "primary_interface": { "type": "string" },
+        "interface_ip": { "type": "string" },
+        "interface_mac": { "type": "string" }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "required": ["start_time_utc", "end_time_utc", "duration_seconds", "interface", "pcap_file"],
+      "properties": {
+        "start_time_utc": { "type": "string", "format": "date-time" },
+        "end_time_utc": { "type": "string", "format": "date-time" },
+        "duration_seconds": { "type": "integer" },
+        "interface": { "type": "string" },
+        "packet_count": { "type": "integer" },
+        "pcap_file": { "type": "string" }
+      }
+    },
+    "events": { "type": "array" },
+    "metrics": { "type": "object" },
+    "artifacts": { "type": "array" }
+  }
+}
