@@ -195,3 +195,8 @@ func dhcpSummary(payload []byte) string {
 	}
 	return fmt.Sprintf("dhcp xid=%d msgtype=%d", xid, msgType)
 }
+type Noop struct{}
+
+func NewNoop() *Noop { return &Noop{} }
+
+func (n *Noop) Parse(_ context.Context, _ Input) (Output, error) { return Output{}, nil }
