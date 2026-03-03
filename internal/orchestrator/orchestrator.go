@@ -56,6 +56,14 @@ func DefaultDependencies(logger Logger) Dependencies {
 		Report:    report.NewDefault(),
 		Bundle:    bundle.NewDefault(),
 		Integrity: integrity.NewDefault(),
+		Capture:   capture.NewNoop(),
+		Parser:    parser.NewNoop(),
+		Detection: detection.NewNoop(),
+		Slicer:    slicer.NewNoop(),
+		Triage:    triage.NewNoop(),
+		Report:    report.NewNoop(),
+		Bundle:    bundle.NewNoop(),
+		Integrity: integrity.NewNoop(),
 		Logger:    logger,
 	}
 }
@@ -83,6 +91,8 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 	origPath := filepath.Join(bundlePath, "original_capture.pcap")
 
 	parsed, err := o.deps.Parser.Parse(ctx, parser.Input{PCAPPath: origPath})
+
+	parsed, err := o.deps.Parser.Parse(ctx, parser.Input{PCAPPath: captureOut.Metadata.PCAPFile})
 	if err != nil {
 		return fmt.Errorf("parser: %w", err)
 	}
@@ -93,11 +103,21 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 	}
 
 	sliced, err := o.deps.Slicer.Slice(ctx, slicer.Input{PCAPPath: origPath, Events: detected.Events, SlicesPath: filepath.Join(bundlePath, "slices")})
+	sliced, err := o.deps.Slicer.Slice(ctx, slicer.Input{
+		PCAPPath:   captureOut.Metadata.PCAPFile,
+		Events:     detected.Events,
+		SlicesPath: filepath.Join(bundlePath, "slices"),
+	})
 	if err != nil {
 		return fmt.Errorf("slicer: %w", err)
 	}
 
 	triageOut, err := o.deps.Triage.Run(ctx, triage.Input{Events: detected.Events, TriagePath: filepath.Join(bundlePath, "triage"), StartedAtUTC: time.Now().UTC()})
+	triageOut, err := o.deps.Triage.Run(ctx, triage.Input{
+		Events:       detected.Events,
+		TriagePath:   filepath.Join(bundlePath, "triage"),
+		StartedAtUTC: time.Now().UTC(),
+	})
 	if err != nil {
 		return fmt.Errorf("triage: %w", err)
 	}
@@ -113,6 +133,18 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 	}
 
 	reportOut, err := o.deps.Report.Generate(ctx, report.Input{BundlePath: filepath.Clean(bundlePath), Machine: machine})
+	reportOut, err := o.deps.Report.Generate(ctx, report.Input{
+		BundlePath: filepath.Clean(bundlePath),
+		Machine: contracts.MachineReport{
+			SchemaVersion: contracts.SchemaVersion,
+			ToolVersion:   contracts.ToolVersion,
+			Host:          captureOut.Host,
+			Capture:       captureOut.Metadata,
+			Events:        sliced.Events,
+			Metrics:       detected.Metrics,
+			Artifacts:     append(sliced.Artifacts, triageOut.Artifacts...),
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("report: %w", err)
 	}
@@ -124,10 +156,14 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("integrity: %w", err)
 	}
 
-	artifactFiles := append(allFiles, filepath.Join(bundlePath, "hashes.txt"))
-	machine.Artifacts = contracts.ArtifactsForFiles(bundlePath, artifactFiles, hashes)
+	machine.Artifacts = contracts.ArtifactsForFiles(allFiles, hashes)
 	if _, err := o.deps.Report.Generate(ctx, report.Input{BundlePath: filepath.Clean(bundlePath), Machine: machine}); err != nil {
 		return fmt.Errorf("report update hashes: %w", err)
+	}
+
+	all := append(reportOut.Files, append(sliced.Paths, triageOut.Paths...)...)
+	if err := o.deps.Integrity.WriteHashes(ctx, integrity.Input{Files: all, OutputPath: filepath.Join(bundlePath, "hashes.txt")}); err != nil {
+		return fmt.Errorf("integrity: %w", err)
 	}
 
 	if cfg.CompressBundle {
@@ -135,6 +171,7 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("bundle compress: %w", err)
 		}
 	}
+
 	if o.deps.Logger != nil {
 		o.deps.Logger.Printf("module=cli severity=info msg=run_complete bundle=%s", bundlePath)
 	}

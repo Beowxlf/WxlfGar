@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -12,8 +11,6 @@ import (
 
 	"github.com/wxlfgar/wulfgar/internal/contracts"
 )
-
-const maxPacketBytes uint32 = 10 * 1024 * 1024
 
 type Input struct{ PCAPPath string }
 
@@ -27,20 +24,14 @@ type Default struct{}
 
 func NewDefault() *Default { return &Default{} }
 
-type pcapHeader struct {
-	endian  binary.ByteOrder
-	ns      bool
-	snapLen uint32
-}
-
-func (n *Default) Parse(ctx context.Context, in Input) (Output, error) {
+func (n *Default) Parse(_ context.Context, in Input) (Output, error) {
 	f, err := os.Open(in.PCAPPath)
 	if err != nil {
 		return Output{}, err
 	}
 	defer f.Close()
 
-	h, err := readGlobalHeader(f)
+	endian, ns, err := readGlobalHeader(f)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return Output{}, nil
@@ -50,9 +41,6 @@ func (n *Default) Parse(ctx context.Context, in Input) (Output, error) {
 
 	packets := []contracts.ParsedPacket{}
 	for {
-		if err := ctx.Err(); err != nil {
-			return Output{}, err
-		}
 		var ph [16]byte
 		if _, err := io.ReadFull(f, ph[:]); err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
@@ -60,29 +48,17 @@ func (n *Default) Parse(ctx context.Context, in Input) (Output, error) {
 			}
 			return Output{}, err
 		}
-		tsSec := h.endian.Uint32(ph[0:4])
-		tsFrac := h.endian.Uint32(ph[4:8])
-		incl := h.endian.Uint32(ph[8:12])
+		tsSec := endian.Uint32(ph[0:4])
+		tsFrac := endian.Uint32(ph[4:8])
+		incl := endian.Uint32(ph[8:12])
 		if incl == 0 {
-			continue
-		}
-		if h.snapLen > 0 && incl > h.snapLen {
-			if _, err := io.CopyN(io.Discard, f, int64(incl)); err != nil {
-				return Output{}, err
-			}
-			continue
-		}
-		if incl > maxPacketBytes {
-			if _, err := io.CopyN(io.Discard, f, int64(incl)); err != nil {
-				return Output{}, err
-			}
 			continue
 		}
 		data := make([]byte, incl)
 		if _, err := io.ReadFull(f, data); err != nil {
 			return Output{}, err
 		}
-		t := time.Unix(int64(tsSec), fracToNanos(tsFrac, h.ns))
+		t := time.Unix(int64(tsSec), fracToNanos(tsFrac, ns))
 		parsed := parseFrame(data)
 		parsed.Timestamp = t.UTC()
 		packets = append(packets, parsed)
@@ -90,27 +66,24 @@ func (n *Default) Parse(ctx context.Context, in Input) (Output, error) {
 	return Output{Packets: packets}, nil
 }
 
-func readGlobalHeader(r io.Reader) (pcapHeader, error) {
+func readGlobalHeader(r io.Reader) (binary.ByteOrder, bool, error) {
 	var gh [24]byte
 	if _, err := io.ReadFull(r, gh[:]); err != nil {
-		return pcapHeader{}, err
+		return nil, false, err
 	}
-	magic := gh[0:4]
-	h := pcapHeader{}
-	switch {
-	case bytes.Equal(magic, []byte{0xd4, 0xc3, 0xb2, 0xa1}):
-		h.endian, h.ns = binary.LittleEndian, false
-	case bytes.Equal(magic, []byte{0xa1, 0xb2, 0xc3, 0xd4}):
-		h.endian, h.ns = binary.BigEndian, false
-	case bytes.Equal(magic, []byte{0x4d, 0x3c, 0xb2, 0xa1}):
-		h.endian, h.ns = binary.LittleEndian, true
-	case bytes.Equal(magic, []byte{0xa1, 0xb2, 0x3c, 0x4d}):
-		h.endian, h.ns = binary.BigEndian, true
+	magic := binary.LittleEndian.Uint32(gh[0:4])
+	switch magic {
+	case 0xa1b2c3d4:
+		return binary.LittleEndian, false, nil
+	case 0xd4c3b2a1:
+		return binary.BigEndian, false, nil
+	case 0xa1b23c4d:
+		return binary.LittleEndian, true, nil
+	case 0x4d3cb2a1:
+		return binary.BigEndian, true, nil
 	default:
-		return pcapHeader{}, fmt.Errorf("unsupported pcap magic")
+		return nil, false, fmt.Errorf("unsupported pcap magic")
 	}
-	h.snapLen = h.endian.Uint32(gh[16:20])
-	return h, nil
 }
 
 func fracToNanos(v uint32, ns bool) int64 {
@@ -222,3 +195,8 @@ func dhcpSummary(payload []byte) string {
 	}
 	return fmt.Sprintf("dhcp xid=%d msgtype=%d", xid, msgType)
 }
+type Noop struct{}
+
+func NewNoop() *Noop { return &Noop{} }
+
+func (n *Noop) Parse(_ context.Context, _ Input) (Output, error) { return Output{}, nil }

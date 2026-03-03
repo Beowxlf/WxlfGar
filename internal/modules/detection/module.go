@@ -117,3 +117,8 @@ func mkEvent(idx int, protocol, indicator string, p contracts.ParsedPacket, desc
 }
 
 func nextID(prefix string, idx int) string { return fmt.Sprintf("%s_%d", prefix, idx) }
+type Noop struct{}
+
+func NewNoop() *Noop { return &Noop{} }
+
+func (n *Noop) Detect(_ context.Context, _ Input) (Output, error) { return Output{}, nil }

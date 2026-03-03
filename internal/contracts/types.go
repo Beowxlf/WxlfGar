@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 )
+import "time"
 
 const (
 	SchemaVersion = "1.0"
@@ -92,16 +93,12 @@ type MachineReport struct {
 	Artifacts     []ArtifactEntry `json:"artifacts"`
 }
 
-func ArtifactsForFiles(bundlePath string, files []string, hashes map[string]string) []ArtifactEntry {
+func ArtifactsForFiles(files []string, hashes map[string]string) []ArtifactEntry {
 	res := make([]ArtifactEntry, 0, len(files))
 	for _, file := range files {
 		name := filepath.Base(file)
-		rel, err := filepath.Rel(bundlePath, file)
-		if err != nil {
-			rel = name
-		}
-		rel = filepath.ToSlash(rel)
-		res = append(res, ArtifactEntry{FileName: rel, SHA256: hashes[name], Type: artifactType(rel)})
+		rel := filepath.ToSlash(file)
+		res = append(res, ArtifactEntry{FileName: rel, SHA256: hashes[name], Type: artifactType(file)})
 	}
 	return res
 }
@@ -109,9 +106,9 @@ func ArtifactsForFiles(bundlePath string, files []string, hashes map[string]stri
 func artifactType(path string) string {
 	p := filepath.ToSlash(path)
 	switch {
-	case strings.Contains(p, "triage/") || strings.HasPrefix(p, "triage/"):
+	case strings.Contains(p, "/triage/"):
 		return "triage_output"
-	case strings.Contains(p, "slices/") || strings.HasPrefix(p, "slices/"):
+	case strings.Contains(p, "/slices/"):
 		return "pcap_slice"
 	case strings.HasSuffix(p, ".pcap"):
 		return "pcap"
