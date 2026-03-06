@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/wxlfgar/wulfgar/internal/contracts"
@@ -82,23 +80,6 @@ func (n *Default) Run(_ context.Context, in Input) (Output, error) {
 			Hostname:         hostname,
 			OSVersion:        runtime.GOOS,
 			Architecture:     runtime.GOARCH,
-type Noop struct{}
-
-func NewNoop() *Noop { return &Noop{} }
-
-func (n *Noop) Run(_ context.Context, in Input) (Output, error) {
-	if err := os.MkdirAll(filepath.Dir(in.PCAPPath), 0o755); err != nil {
-		return Output{}, err
-	}
-	if err := os.WriteFile(in.PCAPPath, []byte(""), 0o644); err != nil {
-		return Output{}, err
-	}
-	now := time.Now().UTC()
-	return Output{
-		Host: contracts.HostInfo{
-			Hostname:         "UNSET",
-			OSVersion:        "Windows",
-			Architecture:     "x64",
 			PrimaryInterface: in.InterfaceName,
 			InterfaceIP:      "0.0.0.0",
 		},
@@ -108,12 +89,15 @@ func (n *Noop) Run(_ context.Context, in Input) (Output, error) {
 			DurationSeconds: int(end.Sub(now).Seconds()),
 			Interface:       in.InterfaceName,
 			PacketCount:     pktCount,
-			PCAPFile:        "original_capture.pcap",
-			EndTimeUTC:      now.Add(in.Duration),
-			DurationSeconds: int(in.Duration.Seconds()),
-			Interface:       in.InterfaceName,
-			PacketCount:     0,
 			PCAPFile:        in.PCAPPath,
 		},
 	}, nil
+}
+
+type Noop struct{}
+
+func NewNoop() *Noop { return &Noop{} }
+
+func (n *Noop) Run(ctx context.Context, in Input) (Output, error) {
+	return NewDefault().Run(ctx, in)
 }

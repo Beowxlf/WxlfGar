@@ -28,12 +28,6 @@ func (n *Default) PrepareLayout(_ context.Context, in PrepareInput) (string, err
 		hostname = "HOST"
 	}
 	hostname = strings.ReplaceAll(hostname, " ", "_")
-type Noop struct{}
-
-func NewNoop() *Noop { return &Noop{} }
-
-func (n *Noop) PrepareLayout(_ context.Context, in PrepareInput) (string, error) {
-	hostname := "HOST"
 	ts := time.Now().UTC().Format("20060102_150405")
 	bundleName := fmt.Sprintf("Wulfgar_%s_%s", hostname, ts)
 	bundlePath := filepath.Join(in.OutputRoot, bundleName)
@@ -46,7 +40,6 @@ func (n *Noop) PrepareLayout(_ context.Context, in PrepareInput) (string, error)
 }
 
 func (n *Default) Compress(_ context.Context, bundlePath string) (string, error) {
-func (n *Noop) Compress(_ context.Context, bundlePath string) (string, error) {
 	zipPath := bundlePath + ".zip"
 	out, err := os.Create(zipPath)
 	if err != nil {
@@ -78,4 +71,16 @@ func (n *Noop) Compress(_ context.Context, bundlePath string) (string, error) {
 		return "", err
 	}
 	return zipPath, nil
+}
+
+type Noop struct{}
+
+func NewNoop() *Noop { return &Noop{} }
+
+func (n *Noop) PrepareLayout(ctx context.Context, in PrepareInput) (string, error) {
+	return NewDefault().PrepareLayout(ctx, in)
+}
+
+func (n *Noop) Compress(ctx context.Context, bundlePath string) (string, error) {
+	return NewDefault().Compress(ctx, bundlePath)
 }
