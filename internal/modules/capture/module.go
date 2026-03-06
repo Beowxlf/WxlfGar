@@ -44,6 +44,8 @@ func (n *Default) Run(_ context.Context, in Input) (Output, error) {
 		return Output{}, err
 	}
 
+	sizeLimitHit := false
+
 	if in.InputPCAPPath != "" {
 		src, err := os.ReadFile(in.InputPCAPPath)
 		if err != nil {
@@ -51,6 +53,7 @@ func (n *Default) Run(_ context.Context, in Input) (Output, error) {
 		}
 		if in.MaxBytes > 0 && int64(len(src)) > in.MaxBytes {
 			src = src[:in.MaxBytes]
+			sizeLimitHit = true
 		}
 		if err := os.WriteFile(in.PCAPPath, src, 0o644); err != nil {
 			return Output{}, err
@@ -90,6 +93,7 @@ func (n *Default) Run(_ context.Context, in Input) (Output, error) {
 			Interface:       in.InterfaceName,
 			PacketCount:     pktCount,
 			PCAPFile:        in.PCAPPath,
+			SizeLimitHit:    sizeLimitHit,
 		},
 	}, nil
 }

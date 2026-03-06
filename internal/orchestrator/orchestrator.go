@@ -3,7 +3,9 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/wxlfgar/wulfgar/internal/contracts"
@@ -116,7 +118,7 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 		Capture:       captureOut.Metadata,
 		Events:        sliced.Events,
 		Metrics:       detected.Metrics,
-		Artifacts:     append(sliced.Artifacts, triageOut.Artifacts...),
+		Artifacts:     nil,
 	}
 
 	reportOut, err := o.deps.Report.Generate(ctx, report.Input{BundlePath: filepath.Clean(bundlePath), Machine: machine})
@@ -128,14 +130,19 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 	allFiles = append(allFiles, sliced.Paths...)
 	allFiles = append(allFiles, triageOut.Paths...)
 
-	hashes, err := o.deps.Integrity.WriteHashes(ctx, integrity.Input{Files: allFiles, OutputPath: filepath.Join(bundlePath, "hashes.txt")})
-	if err != nil {
-		return fmt.Errorf("integrity: %w", err)
+	if err := validateArtifactConsistency(sliced.Paths, triageOut.Paths); err != nil {
+		return fmt.Errorf("artifact consistency: %w", err)
 	}
 
-	machine.Artifacts = contracts.ArtifactsForFiles(allFiles, hashes)
+	hashesPath := filepath.Join(bundlePath, "hashes.txt")
+	allFilesWithHashes := append(append([]string(nil), allFiles...), hashesPath)
+	machine.Artifacts = contracts.ArtifactsForFiles(allFilesWithHashes, map[string]string{})
 	if _, err := o.deps.Report.Generate(ctx, report.Input{BundlePath: filepath.Clean(bundlePath), Machine: machine}); err != nil {
-		return fmt.Errorf("report update hashes: %w", err)
+		return fmt.Errorf("report finalize: %w", err)
+	}
+
+	if _, err := o.deps.Integrity.WriteHashes(ctx, integrity.Input{Files: allFilesWithHashes, OutputPath: hashesPath}); err != nil {
+		return fmt.Errorf("integrity finalize: %w", err)
 	}
 
 	if cfg.CompressBundle {
@@ -146,6 +153,28 @@ func (o *Orchestrator) Run(ctx context.Context, cfg Config) error {
 
 	if o.deps.Logger != nil {
 		o.deps.Logger.Printf("module=cli severity=info msg=run_complete bundle=%s", bundlePath)
+	}
+	return nil
+}
+
+func validateArtifactConsistency(slicePaths, triagePaths []string) error {
+	seen := map[string]struct{}{}
+	for _, p := range append(slicePaths, triagePaths...) {
+		if _, ok := seen[p]; ok {
+			return fmt.Errorf("duplicate artifact path: %s", p)
+		}
+		seen[p] = struct{}{}
+		if _, err := os.Stat(p); err != nil {
+			return fmt.Errorf("missing artifact %s: %w", p, err)
+		}
+	}
+
+	for _, paths := range [][]string{slicePaths, triagePaths} {
+		sorted := append([]string(nil), paths...)
+		sort.Strings(sorted)
+		if len(sorted) == 0 {
+			continue
+		}
 	}
 	return nil
 }
