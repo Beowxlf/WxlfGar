@@ -27,6 +27,7 @@ type CaptureMetadata struct {
 	Interface       string    `json:"interface"`
 	PacketCount     int64     `json:"packet_count"`
 	PCAPFile        string    `json:"pcap_file"`
+	SizeLimitHit    bool      `json:"size_limit_hit,omitempty"`
 }
 
 type ParsedPacket struct {

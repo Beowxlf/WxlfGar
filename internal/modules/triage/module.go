@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/wxlfgar/wulfgar/internal/contracts"
@@ -51,7 +53,8 @@ func (n *Default) Run(_ context.Context, in Input) (Output, error) {
 	out := Output{}
 	for _, item := range files {
 		path := filepath.Join(in.TriagePath, item.name)
-		body := fmt.Sprintf("command=%s\ntimestamp_utc=%s\nexit_code=0\noutput=stub\n", item.cmd, in.StartedAtUTC.Format(time.RFC3339))
+		exitCode, output := runCommand(item.cmd)
+		body := fmt.Sprintf("command=%s\ntimestamp_utc=%s\nexit_code=%d\noutput=%s\n", item.cmd, in.StartedAtUTC.Format(time.RFC3339), exitCode, output)
 		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 			return Output{}, err
 		}
@@ -59,6 +62,21 @@ func (n *Default) Run(_ context.Context, in Input) (Output, error) {
 		out.Artifacts = append(out.Artifacts, contracts.ArtifactEntry{FileName: filepath.ToSlash(filepath.Join("triage", item.name)), Type: "triage_output"})
 	}
 	return out, nil
+}
+
+func runCommand(cmdline string) (int, string) {
+	if runtime.GOOS != "windows" {
+		return 0, "stub (non-windows platform)"
+	}
+	cmd := exec.Command("cmd", "/C", cmdline)
+	b, err := cmd.CombinedOutput()
+	if err == nil {
+		return 0, string(b)
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return exitErr.ExitCode(), string(b)
+	}
+	return 1, err.Error()
 }
 
 type Noop struct{}

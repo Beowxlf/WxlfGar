@@ -45,6 +45,7 @@ func (n *Default) Generate(_ context.Context, in Input) (Output, error) {
 		fmt.Sprintf("Host: %s", in.Machine.Host.Hostname),
 		fmt.Sprintf("Interface: %s", in.Machine.Capture.Interface),
 		fmt.Sprintf("CaptureDurationSeconds: %d", in.Machine.Capture.DurationSeconds),
+		fmt.Sprintf("CaptureStoppedBySizeLimit: %t", in.Machine.Capture.SizeLimitHit),
 		fmt.Sprintf("EventsDetected: %d", len(in.Machine.Events)),
 		fmt.Sprintf("DNS NXDOMAIN: %d", in.Machine.Metrics.DNS.NXDOMAINCount),
 		fmt.Sprintf("DNS SERVFAIL: %d", in.Machine.Metrics.DNS.SERVFAILCount),

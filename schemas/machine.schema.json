@@ -28,7 +28,8 @@
         "duration_seconds": { "type": "integer" },
         "interface": { "type": "string" },
         "packet_count": { "type": "integer" },
-        "pcap_file": { "type": "string" }
+        "pcap_file": { "type": "string" },
+        "size_limit_hit": { "type": "boolean" }
       }
     },
     "events": { "type": "array" },
