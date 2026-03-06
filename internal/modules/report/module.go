@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"sort"
-	"strings"
 
 	"github.com/wxlfgar/wulfgar/internal/contracts"
 )
@@ -30,11 +28,6 @@ type Default struct{}
 func NewDefault() *Default { return &Default{} }
 
 func (n *Default) Generate(_ context.Context, in Input) (Output, error) {
-type Noop struct{}
-
-func NewNoop() *Noop { return &Noop{} }
-
-func (n *Noop) Generate(_ context.Context, in Input) (Output, error) {
 	machinePath := filepath.Join(in.BundlePath, "machine.json")
 	summaryPath := filepath.Join(in.BundlePath, "summary.txt")
 
@@ -64,13 +57,12 @@ func (n *Noop) Generate(_ context.Context, in Input) (Output, error) {
 		return Output{}, err
 	}
 	return Output{Files: []string{machinePath, summaryPath}}, nil
-		fmt.Sprintf("Interface: %s", in.Machine.Capture.Interface),
-		fmt.Sprintf("DurationSeconds: %d", in.Machine.Capture.DurationSeconds),
-		fmt.Sprintf("Events: %d", len(in.Machine.Events)),
-	}
-	sort.Strings(summary)
-	if err := os.WriteFile(summaryPath, []byte(strings.Join(summary, "\n")+"\n"), 0o644); err != nil {
-		return Output{}, err
-	}
-	return Output{Files: []string{machinePath, summaryPath, filepath.Join(in.BundlePath, "original_capture.pcap")}}, nil
+}
+
+type Noop struct{}
+
+func NewNoop() *Noop { return &Noop{} }
+
+func (n *Noop) Generate(ctx context.Context, in Input) (Output, error) {
+	return NewDefault().Generate(ctx, in)
 }

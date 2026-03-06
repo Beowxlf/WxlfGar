@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"os"
-	"path/filepath"
 
 	"github.com/wxlfgar/wulfgar/internal/contracts"
 )
@@ -34,11 +32,6 @@ type Default struct{}
 func NewDefault() *Default { return &Default{} }
 
 func (n *Default) Slice(_ context.Context, in Input) (Output, error) {
-type Noop struct{}
-
-func NewNoop() *Noop { return &Noop{} }
-
-func (n *Noop) Slice(_ context.Context, in Input) (Output, error) {
 	if err := os.MkdirAll(in.SlicesPath, 0o755); err != nil {
 		return Output{}, err
 	}
@@ -56,10 +49,6 @@ func (n *Noop) Slice(_ context.Context, in Input) (Output, error) {
 			return Output{}, err
 		}
 		if _, err := src.Seek(0, io.SeekStart); err != nil {
-	for idx, event := range out.Events {
-		name := fmt.Sprintf("%s_event_%d.pcap", normalizeProtocol(event.Protocol), idx+1)
-		full := filepath.Join(in.SlicesPath, name)
-		if err := os.WriteFile(full, []byte(""), 0o644); err != nil {
 			return Output{}, err
 		}
 		out.Events[idx].SliceFile = name
@@ -89,13 +78,15 @@ func normalizeProtocol(protocol string) string {
 		return "dhcp"
 	case "SMB":
 		return "smb"
-func normalizeProtocol(protocol string) string {
-	switch protocol {
-	case "DNS", "dns":
-		return "dns"
-	case "ICMP", "icmp":
-		return "icmp"
 	default:
 		return "tcp"
 	}
+}
+
+type Noop struct{}
+
+func NewNoop() *Noop { return &Noop{} }
+
+func (n *Noop) Slice(ctx context.Context, in Input) (Output, error) {
+	return NewDefault().Slice(ctx, in)
 }
