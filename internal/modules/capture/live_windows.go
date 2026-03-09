@@ -35,9 +35,20 @@ func listInterfaces() ([]InterfaceInfo, error) {
 	}
 	out := make([]InterfaceInfo, 0, len(devs))
 	for _, dev := range devs {
-		out = append(out, InterfaceInfo{Name: dev.Name, Description: dev.Description})
+		out = append(out, InterfaceInfo{Name: sanitizeInterfaceAlias(dev.Description, dev.Name), CaptureName: dev.Name, Description: dev.Description})
 	}
 	return out, nil
+}
+
+func sanitizeInterfaceAlias(description, captureName string) string {
+	alias := strings.TrimSpace(description)
+	if alias == "" {
+		alias = strings.TrimSpace(captureName)
+	}
+	if idx := strings.Index(alias, "{"); idx > 0 {
+		alias = strings.TrimSpace(alias[:idx])
+	}
+	return alias
 }
 
 func runLiveCapture(ctx context.Context, in liveInput) (liveOutput, error) {

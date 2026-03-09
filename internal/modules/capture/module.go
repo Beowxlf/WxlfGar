@@ -27,6 +27,7 @@ type Output struct {
 
 type InterfaceInfo struct {
 	Name        string
+	CaptureName string
 	Description string
 }
 
@@ -49,7 +50,7 @@ func ListInterfaces() ([]InterfaceInfo, error) {
 func ValidateInterfaceName(interfaceName string) (InterfaceInfo, error) {
 	trimmed := strings.TrimSpace(interfaceName)
 	if trimmed == "" {
-		return InterfaceInfo{}, fmt.Errorf("live capture requires --interface with a valid device name")
+		return InterfaceInfo{}, fmt.Errorf("live capture requires --interface with a valid interface alias")
 	}
 
 	interfaces, err := listInterfaces()
@@ -60,8 +61,9 @@ func ValidateInterfaceName(interfaceName string) (InterfaceInfo, error) {
 }
 
 func findInterfaceByName(name string, interfaces []InterfaceInfo) (InterfaceInfo, error) {
+	lookup := strings.ToLower(name)
 	for _, iface := range interfaces {
-		if iface.Name == name {
+		if strings.ToLower(iface.Name) == lookup || strings.ToLower(iface.CaptureName) == lookup || strings.ToLower(iface.Description) == lookup {
 			return iface, nil
 		}
 	}
@@ -69,6 +71,10 @@ func findInterfaceByName(name string, interfaces []InterfaceInfo) (InterfaceInfo
 	for _, iface := range interfaces {
 		if iface.Description == "" {
 			available = append(available, iface.Name)
+			continue
+		}
+		if iface.CaptureName != "" && iface.CaptureName != iface.Name {
+			available = append(available, fmt.Sprintf("%s (%s) [capture device: %s]", iface.Name, iface.Description, iface.CaptureName))
 			continue
 		}
 		available = append(available, fmt.Sprintf("%s (%s)", iface.Name, iface.Description))
@@ -120,9 +126,12 @@ func (n *Default) Run(ctx context.Context, in Input) (Output, error) {
 		}
 		host.PrimaryInterface = selectedInterface.Name
 		captureOut.Interface = selectedInterface.Name
+		if selectedInterface.CaptureName == "" {
+			selectedInterface.CaptureName = selectedInterface.Name
+		}
 
 		liveOut, err := runLiveCapture(ctx, liveInput{
-			InterfaceName: selectedInterface.Name,
+			InterfaceName: selectedInterface.CaptureName,
 			Duration:      in.Duration,
 			MaxBytes:      in.MaxBytes,
 			PCAPPath:      in.PCAPPath,

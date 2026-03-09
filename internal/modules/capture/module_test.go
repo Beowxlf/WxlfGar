@@ -30,6 +30,26 @@ func TestFindInterfaceByNameNotFound(t *testing.T) {
 	}
 }
 
+func TestFindInterfaceByNameAliasAndCaptureNameMatch(t *testing.T) {
+	interfaces := []InterfaceInfo{{Name: "Ethernet", CaptureName: `\Device\NPF_{ABC}`, Description: "Ethernet Adapter {ABC}"}}
+
+	gotAlias, err := findInterfaceByName("Ethernet", interfaces)
+	if err != nil {
+		t.Fatalf("expected alias match, got error: %v", err)
+	}
+	if gotAlias.CaptureName != `\Device\NPF_{ABC}` {
+		t.Fatalf("unexpected capture name: %q", gotAlias.CaptureName)
+	}
+
+	gotCapture, err := findInterfaceByName(`\Device\NPF_{ABC}`, interfaces)
+	if err != nil {
+		t.Fatalf("expected capture-name fallback match, got error: %v", err)
+	}
+	if gotCapture.Name != "Ethernet" {
+		t.Fatalf("unexpected alias: %q", gotCapture.Name)
+	}
+}
+
 func TestRunOfflinePCAPPath(t *testing.T) {
 	tmp := t.TempDir()
 	src := filepath.Join(tmp, "src.pcap")

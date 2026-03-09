@@ -18,7 +18,7 @@ func main() {
 	var cfg orchestrator.Config
 	var listInterfaces bool
 
-	flag.StringVar(&cfg.InterfaceName, "interface", "", "Network capture interface name (required for live capture)")
+	flag.StringVar(&cfg.InterfaceName, "interface", "", "Network interface alias (required for live capture)")
 	flag.DurationVar(&cfg.CaptureDuration, "duration", 5*time.Minute, "Live capture duration (example: 30s, 5m)")
 	flag.Int64Var(&cfg.MaxCaptureBytes, "max-bytes", 512*1024*1024, "Maximum pcap payload bytes written")
 	flag.StringVar(&cfg.OutputRoot, "out", "./output", "Output root directory")
@@ -45,11 +45,11 @@ func main() {
 		}
 		fmt.Println("Available capture interfaces:")
 		for _, iface := range interfaces {
-			if iface.Description == "" {
+			if iface.CaptureName == "" || iface.CaptureName == iface.Name {
 				fmt.Printf("- %s\n", iface.Name)
 				continue
 			}
-			fmt.Printf("- %s: %s\n", iface.Name, iface.Description)
+			fmt.Printf("- %s [capture device: %s]\n", iface.Name, iface.CaptureName)
 		}
 		return
 	}
