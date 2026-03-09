@@ -41,6 +41,10 @@ func (n *Default) Slice(_ context.Context, in Input) (Output, error) {
 
 	capture, err := readPCAP(in.PCAPPath)
 	useWindowed := err == nil
+	fallbackReason := ""
+	if err != nil {
+		fallbackReason = err.Error()
+	}
 
 	out := Output{Events: in.Events}
 	for idx, event := range out.Events {
@@ -56,10 +60,18 @@ func (n *Default) Slice(_ context.Context, in Input) (Output, error) {
 			if err := copyRawPCAP(in.PCAPPath, full); err != nil {
 				return Output{}, err
 			}
+			if fallbackReason == "" {
+				fallbackReason = "windowed slicing unavailable"
+			}
+			out.Events[idx].Description = fmt.Sprintf("%s (slice fallback: raw copy of original capture; reason: %s)", strings.TrimSpace(out.Events[idx].Description), fallbackReason)
 		}
 		out.Events[idx].SliceFile = name
 		out.Paths = append(out.Paths, full)
-		out.Artifacts = append(out.Artifacts, contracts.ArtifactEntry{FileName: filepath.ToSlash(filepath.Join("slices", name)), Type: "pcap_slice"})
+		artifactType := "pcap_slice"
+		if !useWindowed {
+			artifactType = "pcap_slice_fallback_raw_copy"
+		}
+		out.Artifacts = append(out.Artifacts, contracts.ArtifactEntry{FileName: filepath.ToSlash(filepath.Join("slices", name)), Type: artifactType})
 	}
 	return out, nil
 }

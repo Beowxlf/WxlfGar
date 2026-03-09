@@ -29,8 +29,10 @@ func (n *Default) Detect(_ context.Context, in Input) (Output, error) {
 	idx := 0
 	synSeen := map[string]time.Time{}
 	dhcpState := map[string]byte{}
+	dhcpLastSeen := map[string]time.Time{}
 	dnsPending := map[string]time.Time{}
 	dnsTimeoutCount := map[string]int{}
+	dnsTimeoutLastSeen := map[string]time.Time{}
 
 	for _, p := range in.Packets {
 		s := strings.ToLower(p.Summary)
@@ -41,10 +43,12 @@ func (n *Default) Detect(_ context.Context, in Input) (Output, error) {
 				if first, ok := dnsPending[flow]; ok {
 					if p.Timestamp.Sub(first) >= 2*time.Second {
 						dnsTimeoutCount[flow]++
+						dnsTimeoutLastSeen[flow] = p.Timestamp
 						dnsPending[flow] = p.Timestamp
 					}
 				} else {
 					dnsPending[flow] = p.Timestamp
+					dnsTimeoutLastSeen[flow] = p.Timestamp
 				}
 			}
 			if strings.Contains(s, "qr=true") {
@@ -109,6 +113,7 @@ func (n *Default) Detect(_ context.Context, in Input) (Output, error) {
 			}
 		case "DHCP":
 			key := p.SourceIP
+			dhcpLastSeen[key] = p.Timestamp
 			if strings.Contains(s, "msgtype=1") {
 				dhcpState[key] = 1
 			}
@@ -124,23 +129,34 @@ func (n *Default) Detect(_ context.Context, in Input) (Output, error) {
 		}
 	}
 
-	for _, count := range dnsTimeoutCount {
+	for flow, count := range dnsTimeoutCount {
 		if count > 0 {
+			ts := dnsTimeoutLastSeen[flow]
+			if ts.IsZero() {
+				ts = time.Unix(0, 0).UTC()
+			}
 			out.Metrics.DNS.TimeoutCount += count
 			idx++
-			out.Events = append(out.Events, contracts.Event{EventID: nextID("dns", idx), Protocol: "DNS", IndicatorType: "TIMEOUT_REPEAT", Description: "Repeated DNS queries without response", Severity: "medium", TimestampUTC: time.Now().UTC()})
+			// Derived event timestamp uses the latest packet timestamp observed for the timed-out flow.
+			out.Events = append(out.Events, contracts.Event{EventID: nextID("dns", idx), Protocol: "DNS", IndicatorType: "TIMEOUT_REPEAT", Description: "Repeated DNS queries without response", Severity: "medium", TimestampUTC: ts})
 		}
 	}
 	for src, state := range dhcpState {
+		ts := dhcpLastSeen[src]
+		if ts.IsZero() {
+			ts = time.Unix(0, 0).UTC()
+		}
 		if state == 1 {
 			out.Metrics.DHCP.DiscoverWithoutOffer++
 			idx++
-			out.Events = append(out.Events, contracts.Event{EventID: nextID("dhcp", idx), Protocol: "DHCP", IndicatorType: "DISCOVER_WITHOUT_OFFER", Description: "DHCP discover without offer", SourceIP: src, TimestampUTC: time.Now().UTC(), Severity: "medium"})
+			// Derived event timestamp uses the last packet timestamp observed for this DHCP source.
+			out.Events = append(out.Events, contracts.Event{EventID: nextID("dhcp", idx), Protocol: "DHCP", IndicatorType: "DISCOVER_WITHOUT_OFFER", Description: "DHCP discover without offer", SourceIP: src, TimestampUTC: ts, Severity: "medium"})
 		}
 		if state == 3 {
 			out.Metrics.DHCP.RequestWithoutAck++
 			idx++
-			out.Events = append(out.Events, contracts.Event{EventID: nextID("dhcp", idx), Protocol: "DHCP", IndicatorType: "REQUEST_WITHOUT_ACK", Description: "DHCP request without ACK", SourceIP: src, TimestampUTC: time.Now().UTC(), Severity: "medium"})
+			// Derived event timestamp uses the last packet timestamp observed for this DHCP source.
+			out.Events = append(out.Events, contracts.Event{EventID: nextID("dhcp", idx), Protocol: "DHCP", IndicatorType: "REQUEST_WITHOUT_ACK", Description: "DHCP request without ACK", SourceIP: src, TimestampUTC: ts, Severity: "medium"})
 		}
 	}
 	return out, nil

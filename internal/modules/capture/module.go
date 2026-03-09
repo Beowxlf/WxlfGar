@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/wxlfgar/wulfgar/internal/contracts"
@@ -24,6 +25,11 @@ type Output struct {
 	Metadata contracts.CaptureMetadata
 }
 
+type InterfaceInfo struct {
+	Name        string
+	Description string
+}
+
 type Module interface {
 	Run(context.Context, Input) (Output, error)
 }
@@ -32,19 +38,63 @@ type Default struct{}
 
 func NewDefault() *Default { return &Default{} }
 
-func (n *Default) Run(_ context.Context, in Input) (Output, error) {
+func ListInterfaces() ([]InterfaceInfo, error) {
+	interfaces, err := listInterfaces()
+	if err != nil {
+		return nil, err
+	}
+	return interfaces, nil
+}
+
+func ValidateInterfaceName(interfaceName string) (InterfaceInfo, error) {
+	trimmed := strings.TrimSpace(interfaceName)
+	if trimmed == "" {
+		return InterfaceInfo{}, fmt.Errorf("live capture requires --interface with a valid device name")
+	}
+
+	interfaces, err := listInterfaces()
+	if err != nil {
+		return InterfaceInfo{}, err
+	}
+	return findInterfaceByName(trimmed, interfaces)
+}
+
+func findInterfaceByName(name string, interfaces []InterfaceInfo) (InterfaceInfo, error) {
+	for _, iface := range interfaces {
+		if iface.Name == name {
+			return iface, nil
+		}
+	}
+	available := make([]string, 0, len(interfaces))
+	for _, iface := range interfaces {
+		if iface.Description == "" {
+			available = append(available, iface.Name)
+			continue
+		}
+		available = append(available, fmt.Sprintf("%s (%s)", iface.Name, iface.Description))
+	}
+	if len(available) == 0 {
+		return InterfaceInfo{}, fmt.Errorf("capture interface %q not found and no capture interfaces were discovered", name)
+	}
+	return InterfaceInfo{}, fmt.Errorf("capture interface %q not found; available interfaces: %s", name, strings.Join(available, ", "))
+}
+
+func (n *Default) Run(ctx context.Context, in Input) (Output, error) {
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "UNKNOWN"
-	}
-	if in.InterfaceName == "" {
-		in.InterfaceName = "unspecified"
 	}
 	if err := os.MkdirAll(filepath.Dir(in.PCAPPath), 0o755); err != nil {
 		return Output{}, err
 	}
 
-	sizeLimitHit := false
+	captureOut := contracts.CaptureMetadata{PCAPFile: in.PCAPPath}
+	host := contracts.HostInfo{
+		Hostname:     hostname,
+		OSVersion:    runtime.GOOS,
+		Architecture: runtime.GOARCH,
+		InterfaceIP:  "0.0.0.0",
+	}
 
 	if in.InputPCAPPath != "" {
 		src, err := os.ReadFile(in.InputPCAPPath)
@@ -53,49 +103,50 @@ func (n *Default) Run(_ context.Context, in Input) (Output, error) {
 		}
 		if in.MaxBytes > 0 && int64(len(src)) > in.MaxBytes {
 			src = src[:in.MaxBytes]
-			sizeLimitHit = true
+			captureOut.SizeLimitHit = true
 		}
+		start := time.Now().UTC()
 		if err := os.WriteFile(in.PCAPPath, src, 0o644); err != nil {
 			return Output{}, err
 		}
+		end := time.Now().UTC()
+		captureOut.StartTimeUTC = start
+		captureOut.EndTimeUTC = end
+		captureOut.DurationSeconds = int(end.Sub(start).Seconds())
 	} else {
-		if runtime.GOOS != "windows" {
-			return Output{}, fmt.Errorf("live capture requires Windows+Npcap; provide --input-pcap for offline analysis")
-		}
-		if err := os.WriteFile(in.PCAPPath, []byte{}, 0o644); err != nil {
+		selectedInterface, err := ValidateInterfaceName(in.InterfaceName)
+		if err != nil {
 			return Output{}, err
 		}
+		host.PrimaryInterface = selectedInterface.Name
+		captureOut.Interface = selectedInterface.Name
+
+		liveOut, err := runLiveCapture(ctx, liveInput{
+			InterfaceName: selectedInterface.Name,
+			Duration:      in.Duration,
+			MaxBytes:      in.MaxBytes,
+			PCAPPath:      in.PCAPPath,
+		})
+		if err != nil {
+			return Output{}, err
+		}
+		captureOut.StartTimeUTC = liveOut.StartTimeUTC
+		captureOut.EndTimeUTC = liveOut.EndTimeUTC
+		captureOut.DurationSeconds = int(liveOut.EndTimeUTC.Sub(liveOut.StartTimeUTC).Seconds())
+		captureOut.PacketCount = liveOut.PacketCount
+		captureOut.SizeLimitHit = liveOut.SizeLimitHit
 	}
 
-	now := time.Now().UTC()
-	end := now.Add(in.Duration)
-	if in.Duration <= 0 {
-		end = now
+	if captureOut.Interface == "" {
+		captureOut.Interface = host.PrimaryInterface
 	}
-	fi, _ := os.Stat(in.PCAPPath)
-	pktCount := int64(0)
-	if fi != nil && fi.Size() > 24 {
-		pktCount = 1
+	if in.InputPCAPPath == "" {
+		if fi, err := os.Stat(in.PCAPPath); err == nil && fi.Size() <= 24 {
+			return Output{}, fmt.Errorf("capture output %s is empty or header-only (%d bytes)", in.PCAPPath, fi.Size())
+		}
 	}
 
-	return Output{
-		Host: contracts.HostInfo{
-			Hostname:         hostname,
-			OSVersion:        runtime.GOOS,
-			Architecture:     runtime.GOARCH,
-			PrimaryInterface: in.InterfaceName,
-			InterfaceIP:      "0.0.0.0",
-		},
-		Metadata: contracts.CaptureMetadata{
-			StartTimeUTC:    now,
-			EndTimeUTC:      end,
-			DurationSeconds: int(end.Sub(now).Seconds()),
-			Interface:       in.InterfaceName,
-			PacketCount:     pktCount,
-			PCAPFile:        in.PCAPPath,
-			SizeLimitHit:    sizeLimitHit,
-		},
-	}, nil
+	return Output{Host: host, Metadata: captureOut}, nil
 }
 
 type Noop struct{}

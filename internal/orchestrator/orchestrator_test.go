@@ -81,6 +81,44 @@ func TestRunProducesConsistentArtifactsAndMachineHash(t *testing.T) {
 	}
 }
 
+func TestOfflineRunDoesNotClaimLiveInterfaceInMetadata(t *testing.T) {
+	tmp := t.TempDir()
+	o := New(DefaultDependencies(nil))
+
+	err := o.Run(context.Background(), Config{
+		OutputRoot:    tmp,
+		InterfaceName: "Ethernet 3",
+		InputPCAPPath: filepath.Join("..", "..", "examples", "Wulfgar_WS01_20260302_184512", "original_capture.pcap"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 bundle, got %d", len(entries))
+	}
+
+	machinePath := filepath.Join(tmp, entries[0].Name(), "machine.json")
+	blob, err := os.ReadFile(machinePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var machine contracts.MachineReport
+	if err := json.Unmarshal(blob, &machine); err != nil {
+		t.Fatal(err)
+	}
+	if machine.Host.PrimaryInterface != "" {
+		t.Fatalf("offline run should not claim host primary interface; got %q", machine.Host.PrimaryInterface)
+	}
+	if machine.Capture.Interface != "" {
+		t.Fatalf("offline run should not claim capture interface; got %q", machine.Capture.Interface)
+	}
+}
+
 func validateAgainstSchema(machineJSON []byte, schemaPath string) error {
 	var schema map[string]any
 	var machine map[string]any
