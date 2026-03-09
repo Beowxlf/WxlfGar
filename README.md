@@ -4,9 +4,9 @@ Wulfgar is a Windows-focused diagnostic CLI for MSP technicians investigating in
 
 ## Current Repository Status
 
-This repository is in an early implementation state: architecture and guardrails are defined, and a Phase 1 Go skeleton is present for the end-to-end pipeline.
+This repository is in an early implementation state: architecture and guardrails are defined, and a Phase 1 Go pipeline is present for end-to-end artifact generation.
 
-Implemented at a scaffold/baseline level:
+Implemented in this Phase 1 baseline:
 
 - Go module and CLI entrypoint (`cmd/wulfgar`)
 - Pipeline module layout under `internal/modules`
@@ -18,7 +18,7 @@ Implemented at a scaffold/baseline level:
 
 Phase 1 targets a **local Windows 10/11 workflow** with no server dependency:
 
-- Select a network interface and run a bounded capture window
+- Select a network interface and run a bounded live capture window
 - Parse packet data for high-signal connectivity protocols
 - Detect timestamped connectivity anomalies
 - Slice packet data around key event windows
@@ -29,26 +29,48 @@ Designed processing flow:
 
 `CLI -> Capture -> Parser -> Detection -> Slicer -> Triage -> Report -> Bundle -> Integrity`
 
-## Quick Start
+## CLI Usage (Top-Level Flags)
 
-Run with an existing capture file:
+The current CLI is **top-level flags only**.
 
-```bash
-go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output --input-pcap ./path/to/capture.pcap
-```
+Subcommands such as `capture` are **not supported** in this release.
 
-Run with live capture (platform-dependent):
+### Discover interfaces
 
 ```bash
-go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output
+wulfgar.exe --list-interfaces
 ```
 
-Optional compression flag:
+This prints available capture interfaces as reported by Npcap (device name and description when available).
+
+### Live capture (Windows + Npcap)
 
 ```bash
-go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output --compress
-go run ./cmd/wulfgar --interface Ethernet --duration 30s --out ./output --input-pcap ./path/to/capture.pcap --compress
+wulfgar.exe --interface "Ethernet 3" --duration 30s --out .\output
 ```
+
+### Offline replay mode (`--input-pcap`)
+
+```bash
+wulfgar.exe --input-pcap .\path\to\capture.pcap --out .\output
+```
+
+Optional compression flag for either mode:
+
+```bash
+wulfgar.exe --interface "Ethernet 3" --duration 30s --out .\output --compress
+wulfgar.exe --input-pcap .\path\to\capture.pcap --out .\output --compress
+```
+
+## Windows live capture requirements
+
+Live capture requires:
+
+- Windows 10/11
+- Npcap installed with WinPcap-compatible API support
+- Sufficient privileges to open the capture device (run elevated if required)
+
+If Npcap is unavailable, interface enumeration or live capture will fail with a deterministic error message.
 
 ## Artifact Bundle Output
 
