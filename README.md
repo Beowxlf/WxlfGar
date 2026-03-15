@@ -2,7 +2,57 @@
 
 Wulfgar is a Windows-focused diagnostic CLI for MSP technicians investigating intermittent internet connectivity issues. It captures and analyzes network evidence, runs deterministic local triage, and outputs a structured artifact bundle for faster, repeatable diagnosis.
 
-## Current Repository Status
+## Problem
+
+Intermittent connectivity incidents are notoriously difficult to diagnose because evidence disappears before a technician can observe the failure state directly. By the time manual checks begin, packet-level context, transient DNS behavior, and route/interface state often look normal.
+
+## Why normal troubleshooting fails
+
+Traditional troubleshooting for "internet is slow/drops sometimes" usually relies on ad-hoc commands and point-in-time observation. That approach fails when failures are brief, non-reproducible, or dependent on timing. Common gaps include:
+
+- No packet evidence captured at failure time
+- No consistent artifact format between technicians
+- Incomplete timeline correlation across DNS, transport, and host state
+- Manual command selection that varies by operator
+
+## Wulfgar approach
+
+Wulfgar standardizes investigation into a deterministic local workflow that:
+
+- Captures bounded packet evidence
+- Detects high-signal connectivity events with timestamps
+- Slices packet windows around those events
+- Runs a fixed triage command allowlist
+- Produces a repeatable artifact bundle with integrity hashes
+
+Designed processing flow:
+
+`CLI -> Capture -> Parser -> Detection -> Slicer -> Triage -> Report -> Bundle -> Integrity`
+
+## Guardrails
+
+Wulfgar is diagnostic-only. It does **not**:
+
+- Inject or craft packets
+- Spoof network identities
+- Execute arbitrary or remote commands
+- Access credential stores
+- Perform offensive or stealth behavior
+
+## Sample output
+
+A typical run produces:
+
+- Original packet capture input
+- Event-focused packet slices
+- Human-readable summary report
+- Machine-readable JSON report
+- Triage command output logs
+- SHA256 integrity hashes
+
+See `examples/` for a representative bundle structure.
+
+## Current status
 
 This repository is in an early implementation state: architecture and guardrails are defined, and a Phase 1 Go pipeline is present for end-to-end artifact generation.
 
@@ -14,20 +64,15 @@ Implemented in this Phase 1 baseline:
 - Documentation set in `Documents/`
 - Example artifact bundle layout in `examples/`
 
-## Phase 1 Scope (Windows Local CLI)
+## Roadmap
 
-Phase 1 targets a **local Windows 10/11 workflow** with no server dependency:
+Wulfgar's phased roadmap is documented in `Documents/03-Phase-Roadmap.md`.
 
-- Select a network interface and run a bounded live capture window
-- Parse packet data for high-signal connectivity protocols
-- Detect timestamped connectivity anomalies
-- Slice packet data around key event windows
-- Run deterministic, allowlisted triage commands
-- Generate a structured artifact bundle with integrity metadata
-
-Designed processing flow:
-
-`CLI -> Capture -> Parser -> Detection -> Slicer -> Triage -> Report -> Bundle -> Integrity`
+- **Phase 1:** Local Windows diagnostic CLI and artifact generation
+- **Phase 2:** Secure server integration for artifact upload and storage
+- **Phase 3:** Optional modular agent mode with trigger-based capture
+- **Phase 4:** Multi-platform expansion (Linux and macOS)
+- **Phase 5:** Intelligence and correlation enhancements
 
 ## CLI Usage (Top-Level Flags)
 
@@ -72,19 +117,6 @@ Live capture requires:
 
 If Npcap is unavailable, interface enumeration or live capture will fail with a deterministic error message.
 
-## Artifact Bundle Output
-
-A typical run produces:
-
-- Original packet capture input
-- Event-focused packet slices
-- Human-readable summary report
-- Machine-readable JSON report
-- Triage command output logs
-- SHA256 integrity hashes
-
-See `examples/` for a representative bundle structure.
-
 ## Deterministic Triage (Allowlisted)
 
 Wulfgar intentionally restricts triage to a fixed command allowlist:
@@ -94,16 +126,6 @@ Wulfgar intentionally restricts triage to a fixed command allowlist:
 - `route print`
 - `arp -a`
 - `netsh interface show interface`
-
-## Security and Guardrails
-
-Wulfgar is diagnostic-only. It does **not**:
-
-- Inject or craft packets
-- Spoof network identities
-- Execute arbitrary or remote commands
-- Access credential stores
-- Perform offensive or stealth behavior
 
 ## Documentation Map
 
